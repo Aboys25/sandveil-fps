@@ -150,9 +150,15 @@ export function createWorld(scene) {
   for (const name of Object.keys(PALETTE)) {
     mats[name] = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE[name]), roughness: 0.9, metalness: 0.04 });
   }
+  // Textured materials keep a white color: three.js diffuse is color x map,
+  // and the canvas textures already carry the palette hue, so a tinted color
+  // darkens them twice (the ground material's white x texture is the pattern).
   mats.surface.map = wallTexture();
+  mats.surface.color.set(0xffffff);
   mats.rust.map = containerTexture('#8c4a2f', 'SANDVEIL');
+  mats.rust.color.set(0xffffff);
   mats.teal.map = containerTexture('#3f7d7a', 'FREIGHT 07');
+  mats.teal.color.set(0xffffff);
 
   // Ground.
   const ground = new THREE.Mesh(

@@ -177,6 +177,8 @@ function onActorKilled(victim, attacker, headshot) {
   match.onKill(victim.isPlayer ? 'player' : victim.name, attacker && attacker.isPlayer ? 'player' : killerName, headshot);
   hud.addKill(killerName, victim.name, headshot, killerTeam);
   if (victim.isPlayer) {
+    // Death loses the bought primary (CS-style economy): respawn pistol-only.
+    weapons.losePrimary();
     // The charge drops where the player fell, so a teammate can recover it.
     if (match.state.bomb.carrier === playerActor) {
       match.state.bomb.state = 'dropped';
@@ -268,6 +270,7 @@ const bots = createBots(scene, world.colliders, {
 
 // --- HUD + input ------------------------------------------------------------------
 let buyOpen = false;
+let paused = false;
 let spectateTarget = null;
 let grenadeCooldown = 0;
 let plantProgress = 0;
@@ -280,6 +283,7 @@ const hud = createHud({
     audio.unlock();
     if (match.state.phase === 'menu' || match.state.phase === 'matchEnd') {
       match.startMatch();
+      weapons.resetMatch();
       respawnRound();
       hud.hideOverlay();
     }
@@ -293,9 +297,11 @@ const hud = createHud({
 const input = createInput(renderer.domElement, (locked) => {
   if (shot) return;
   if (locked) {
+    paused = false;
     hud.hideOverlay();
     if (buyOpen) closeBuy();
   } else if (match.state.phase !== 'menu' && match.state.phase !== 'matchEnd' && !buyOpen) {
+    paused = true;
     hud.showOverlay('paused');
   }
 });
@@ -344,7 +350,7 @@ function respawnRound() {
   const yaw = team === 'atk' ? Math.PI * 0.22 : -Math.PI * 0.78;
   player.reset(spawn[0], spawn[1], yaw);
   player.state.armour = match.state.loadout.armour;
-  weapons.refillAll();
+  weapons.refillSidearm();
   spectateTarget = null;
   hud.setSpectate(null);
   plantProgress = 0;
@@ -741,14 +747,18 @@ function frame(now) {
       const sens = input.state.aiming && weapons.current().zoom > 1 ? 0.0011 : 0.0022;
       player.look(look.x, look.y, sens);
     }
-    accumulator += dt;
-    let steps = 0;
-    while (accumulator >= FIXED_STEP && steps < 5) {
-      step(FIXED_STEP);
-      accumulator -= FIXED_STEP;
-      steps += 1;
+    // Paused: keep rendering (and the camera still), but run no simulation
+    // steps — timers, bots and the bomb all freeze behind the overlay.
+    if (!paused) {
+      accumulator += dt;
+      let steps = 0;
+      while (accumulator >= FIXED_STEP && steps < 5) {
+        step(FIXED_STEP);
+        accumulator -= FIXED_STEP;
+        steps += 1;
+      }
+      if (accumulator > FIXED_STEP * 5) accumulator = 0;
     }
-    if (accumulator > FIXED_STEP * 5) accumulator = 0;
     syncCamera(dt);
   }
   renderer.render(scene, camera);

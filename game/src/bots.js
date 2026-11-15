@@ -107,6 +107,7 @@ export function createBots(scene, colliders, hooks) {
       reactLeft: 0,
       burstLeft: 0,
       burstPause: 0,
+      shotLeft: 0,
       strafeDir: 1,
       strafeLeft: 0,
       thinkLeft: (index * 0.13) % (1 / THINK_HZ),
@@ -124,7 +125,13 @@ export function createBots(scene, colliders, hooks) {
     model.torso.userData.part = 'torso';
     model.head.userData.actor = bot;
     model.head.userData.part = 'head';
-    hitMeshes.push(model.torso, model.head);
+    // Legs and arms count as torso hits: without them ~44% of the standing
+    // silhouette lets shots pass through to the wall behind.
+    for (const limb of [model.legL, model.legR, model.armL, model.armR]) {
+      limb.userData.actor = bot;
+      limb.userData.part = 'torso';
+    }
+    hitMeshes.push(model.torso, model.head, model.legL, model.legR, model.armL, model.armR);
     bot.damage = (amount, head, attacker) => damageBot(bot, amount, head, attacker);
     bots.push(bot);
     return bot;
@@ -226,6 +233,8 @@ export function createBots(scene, colliders, hooks) {
 
   function shootAt(bot, dt) {
     if (!bot.target || bot.reactLeft > 0) return;
+    bot.shotLeft = Math.max(0, bot.shotLeft - dt);
+    if (bot.shotLeft > 0) return;
     if (bot.burstPause > 0) {
       bot.burstPause -= dt;
       return;
@@ -237,6 +246,7 @@ export function createBots(scene, colliders, hooks) {
     bot.burstLeft -= 1;
     if (bot.burstLeft <= 0) bot.burstPause = range(hooks.random, 0.35, 0.7);
     const def = hooks.weaponDef(bot.weapon);
+    bot.shotLeft = def.rate;
     const from = shootFrom.set(bot.body.position.x, bot.body.position.y + EYE, bot.body.position.z);
     const target = bot.target;
     const aimY = target.body.position.y + (hooks.random() < 0.16 ? 1.68 : 1.25);
@@ -271,7 +281,12 @@ export function createBots(scene, colliders, hooks) {
       }
       if (bomb.state === 'dropped' && hooks.nearestAttacker() === bot) {
         callout(bot, 'Recovering the charge!');
-        routeTo(bot, nearestNode(bomb.position.x, bomb.position.z));
+        // Only re-route from a distance: close in, the direct seek in steer()
+        // finishes the job, and re-routing every think would drag the bot
+        // back to the nearest nav node.
+        const dx = bomb.position.x - bot.body.position.x;
+        const dz = bomb.position.z - bot.body.position.z;
+        if (Math.hypot(dx, dz) > 2.5) routeTo(bot, nearestNode(bomb.position.x, bomb.position.z));
         bot.mode = 'advance';
         bot.afterArrive = 'hold';
         return;
@@ -381,8 +396,12 @@ export function createBots(scene, colliders, hooks) {
           bot.defusing = 0;
           hooks.onDefuse(bot);
         }
-      } else {
+      } else if (bot.pathIndex < bot.path.length) {
         followPath(bot, dt);
+      } else {
+        // Path exhausted: the nearest nav node can sit metres from a corner
+        // plant, so steer straight at the bomb for the last leg.
+        seekPoint(bot, dt, bomb.position.x, bomb.position.z);
       }
       return;
     } else if (bot.mode === 'hold') {
@@ -392,6 +411,18 @@ export function createBots(scene, colliders, hooks) {
     } else if (bot.pathIndex < bot.path.length) {
       followPath(bot, dt);
       return;
+    } else if (bot.team === 'atk' && hooks.bombState().state === 'dropped' && hooks.nearestAttacker() === bot) {
+      // Recovering: the path is exhausted but the bomb sits off the nav
+      // graph, so steer straight at it instead of holding at the node.
+      const bomb = hooks.bombState();
+      const dx = bomb.position.x - body.position.x;
+      const dz = bomb.position.z - body.position.z;
+      if (Math.hypot(dx, dz) > 1.2) {
+        seekPoint(bot, dt, bomb.position.x, bomb.position.z);
+        return;
+      }
+      bot.mode = 'hold';
+      bot.afterArrive = null;
     } else if (bot.afterArrive === 'push') {
       // Reached the lane waypoint: push on to the target site.
       routeTo(bot, hooks.siteNode(hooks.targetSite()));
@@ -453,6 +484,24 @@ export function createBots(scene, colliders, hooks) {
     bot.moving = true;
   }
 
+  // Direct steering toward a point, for the last leg off the nav graph (a
+  // corner plant, a dropped bomb). Same movement model as followPath: face
+  // the target, accelerate, slide along colliders axis by axis.
+  function seekPoint(bot, dt, x, z) {
+    const dx = x - bot.body.position.x;
+    const dz = z - bot.body.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.05) return;
+    faceToward(bot, x, z, dt, 8);
+    const speed = 4.6;
+    const blend = Math.min(1, 30 * dt / speed);
+    bot.body.velocity.x += ((dx / dist) * speed - bot.body.velocity.x) * blend;
+    bot.body.velocity.z += ((dz / dist) * speed - bot.body.velocity.z) * blend;
+    bot.body.velocity.y -= 20 * dt;
+    moveBody(bot.body, dt, colliders);
+    bot.moving = true;
+  }
+
   function syncModel(bot, dt) {
     const model = bot.model;
     model.group.position.set(bot.body.position.x, bot.body.position.y, bot.body.position.z);
@@ -502,6 +551,7 @@ export function createBots(scene, colliders, hooks) {
         bot.hasKnown = false;
         bot.planting = 0;
         bot.defusing = 0;
+        bot.shotLeft = 0;
         bot.fall = 0;
         bot.investigate = null;
         bot.path = [];

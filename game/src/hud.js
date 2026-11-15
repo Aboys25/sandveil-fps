@@ -271,10 +271,12 @@ export function createHud(callbacks) {
         g.arc(toX(ally.x), toZ(ally.z), 3, 0, Math.PI * 2);
         g.fill();
       }
-      // The player: a triangle pointing where they face.
+      // The player: a triangle pointing where they face. Facing is
+      // (-sin yaw, -cos yaw) and canvas rotation is clockwise, so the
+      // triangle (drawn pointing up) needs -yaw; yaw + PI mirrored N/S.
       g.save();
       g.translate(toX(player.x), toZ(player.z));
-      g.rotate(Math.atan2(Math.sin(playerYaw), Math.cos(playerYaw)) + Math.PI);
+      g.rotate(-playerYaw);
       g.fillStyle = '#f2e8d5';
       g.beginPath();
       g.moveTo(0, -6);

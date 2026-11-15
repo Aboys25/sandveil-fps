@@ -83,10 +83,14 @@ export function createWeapons(camera) {
 
   const ammo = {};
   for (const id of Object.keys(WEAPONS)) ammo[id] = { mag: WEAPONS[id].mag, reserve: WEAPONS[id].reserve };
+  // Economy (CS-style): the player starts with no primary — pistol only,
+  // $800 — and must buy one. A bought primary is kept while its owner
+  // survives the round, lost on death, and never refilled free.
+  // Invariant: held === 'primary' implies primary is non-null.
   const state = {
-    primary: 'rifle',
+    primary: null,
     sidearm: 'pistol',
-    held: 'primary',
+    held: 'sidearm',
     cooldown: 0,
     reloadLeft: 0,
     flash: 0,
@@ -173,6 +177,7 @@ export function createWeapons(camera) {
     },
     switchTo(slot) {
       if (state.held === slot || state.swapLeft > 0) return;
+      if (slot === 'primary' && !state.primary) return;
       state.held = slot;
       state.reloadLeft = 0;
       state.swapLeft = 0.28;
@@ -186,10 +191,30 @@ export function createWeapons(camera) {
       if (state.held === 'primary') showHeld();
       return true;
     },
-    refillAll() {
-      for (const id of Object.keys(WEAPONS)) ammo[id] = { mag: WEAPONS[id].mag, reserve: WEAPONS[id].reserve };
+    refillSidearm() {
+      // Round start: only the sidearm refills free. A surviving primary keeps
+      // whatever ammo it had; rebuying it at full price is the refill.
+      ammo[state.sidearm] = { mag: WEAPONS[state.sidearm].mag, reserve: WEAPONS[state.sidearm].reserve };
       state.reloadLeft = 0;
       state.cooldown = 0;
+    },
+    losePrimary() {
+      // Death loses the bought primary; the player respawns on the pistol.
+      state.primary = null;
+      if (state.held === 'primary') {
+        state.held = 'sidearm';
+        state.reloadLeft = 0;
+        showHeld();
+      }
+    },
+    resetMatch() {
+      // A new match (Deploy / Play Again) starts pistol-only, full ammo.
+      state.primary = null;
+      state.held = 'sidearm';
+      state.reloadLeft = 0;
+      state.cooldown = 0;
+      for (const id of Object.keys(WEAPONS)) ammo[id] = { mag: WEAPONS[id].mag, reserve: WEAPONS[id].reserve };
+      showHeld();
     },
   };
 }
