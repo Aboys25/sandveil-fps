@@ -21,31 +21,36 @@ function box(w, h, d, x, y, z, material) {
 }
 
 export function createWeapons(camera) {
-  const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.hairline), roughness: 0.6, metalness: 0.3 });
-  const metal = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.muted), roughness: 0.45, metalness: 0.5 });
-  const wood = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.rust), roughness: 0.8, metalness: 0.05 });
-  const gripMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.olive), roughness: 0.85, metalness: 0.05 });
+  // View-model materials carry a little of their own colour as emissive, so the
+  // held gun reads against dark ground without washing out into one flat tone.
+  const dark = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.hairline), emissive: new THREE.Color(PALETTE.hairline), emissiveIntensity: 0.25, roughness: 0.6, metalness: 0.3 });
+  const metal = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.muted), emissive: new THREE.Color(PALETTE.muted), emissiveIntensity: 0.18, roughness: 0.45, metalness: 0.5 });
+  const wood = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.rust), emissive: new THREE.Color(PALETTE.rust), emissiveIntensity: 0.15, roughness: 0.8, metalness: 0.05 });
+  const gripMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.olive), emissive: new THREE.Color(PALETTE.olive), emissiveIntensity: 0.15, roughness: 0.85, metalness: 0.05 });
 
   // One view model per gun, all parented to the camera; only the held one shows.
+  // Each silhouette differs: a dark receiver, a light barrel, a warm stock, and
+  // magazine, grip and sight boxes that break the outline.
   const models = {};
   const rifle = new THREE.Group();
-  rifle.add(box(0.09, 0.1, 0.44, 0, 0, 0, metal), box(0.045, 0.045, 0.42, 0, 0.03, -0.4, dark), box(0.07, 0.09, 0.2, 0, -0.02, 0.3, wood), box(0.06, 0.12, 0.08, 0, -0.09, 0.08, gripMat), box(0.03, 0.05, 0.1, 0, 0.08, -0.1, dark));
+  rifle.add(box(0.08, 0.09, 0.4, 0, 0, 0, dark), box(0.035, 0.035, 0.5, 0, 0.03, -0.42, metal), box(0.07, 0.09, 0.2, 0, -0.02, 0.3, wood), box(0.06, 0.13, 0.09, 0, -0.1, -0.02, dark), box(0.06, 0.12, 0.08, 0, -0.09, 0.12, gripMat), box(0.025, 0.07, 0.06, 0, 0.08, -0.28, metal));
   models.rifle = rifle;
   const smg = new THREE.Group();
-  smg.add(box(0.08, 0.09, 0.3, 0, 0, 0, dark), box(0.04, 0.04, 0.22, 0, 0.02, -0.24, metal), box(0.05, 0.14, 0.07, 0, -0.1, 0.02, gripMat), box(0.06, 0.07, 0.16, 0, -0.01, 0.22, wood));
+  smg.add(box(0.075, 0.085, 0.28, 0, 0, 0, dark), box(0.035, 0.035, 0.24, 0, 0.02, -0.24, metal), box(0.05, 0.14, 0.07, 0, -0.1, 0.02, gripMat), box(0.05, 0.11, 0.07, 0, -0.09, -0.08, metal), box(0.06, 0.07, 0.16, 0, -0.01, 0.22, wood));
   models.smg = smg;
   const shotgun = new THREE.Group();
-  shotgun.add(box(0.09, 0.1, 0.5, 0, 0, 0, wood), box(0.05, 0.05, 0.5, 0, 0.04, -0.42, metal), box(0.07, 0.06, 0.24, 0, -0.06, -0.28, dark), box(0.07, 0.09, 0.22, 0, -0.02, 0.32, wood));
+  shotgun.add(box(0.085, 0.09, 0.46, 0, 0, 0, wood), box(0.045, 0.045, 0.52, 0, 0.04, -0.42, metal), box(0.07, 0.06, 0.24, 0, -0.06, -0.28, dark), box(0.07, 0.09, 0.22, 0, -0.02, 0.32, wood));
   models.shotgun = shotgun;
   const dmr = new THREE.Group();
-  dmr.add(box(0.08, 0.09, 0.52, 0, 0, 0, dark), box(0.035, 0.035, 0.5, 0, 0.03, -0.48, metal), box(0.06, 0.06, 0.18, 0, 0.09, -0.08, metal), box(0.06, 0.1, 0.07, 0, -0.08, 0.1, gripMat), box(0.07, 0.08, 0.24, 0, -0.01, 0.32, wood));
+  dmr.add(box(0.075, 0.085, 0.5, 0, 0, 0, dark), box(0.03, 0.03, 0.52, 0, 0.03, -0.48, metal), box(0.06, 0.06, 0.18, 0, 0.09, -0.08, metal), box(0.06, 0.12, 0.08, 0, -0.09, 0.02, gripMat), box(0.07, 0.08, 0.24, 0, -0.01, 0.32, wood));
   models.dmr = dmr;
   const pistol = new THREE.Group();
-  pistol.add(box(0.06, 0.07, 0.2, 0, 0, -0.04, metal), box(0.05, 0.12, 0.07, 0, -0.08, 0.05, gripMat));
+  pistol.add(box(0.06, 0.07, 0.2, 0, 0, -0.04, metal), box(0.05, 0.12, 0.07, 0, -0.08, 0.05, gripMat), box(0.02, 0.03, 0.04, 0, 0.05, -0.12, dark));
   models.pistol = pistol;
   for (const model of Object.values(models)) {
     model.position.set(0.24, -0.2, -0.42);
     model.rotation.y = 0.06;
+    model.scale.setScalar(0.94);
     model.visible = false;
     camera.add(model);
   }

@@ -53,7 +53,10 @@ export function createInput(canvas, onLockChange) {
   return {
     state,
     requestLock() {
-      canvas.requestPointerLock();
+      // requestPointerLock returns a promise in newer Chrome; a rejection
+      // (e.g. no user gesture) must not surface as an unhandled error.
+      const pending = canvas.requestPointerLock();
+      if (pending && typeof pending.catch === 'function') pending.catch(() => {});
     },
     takeLook() {
       const x = state.lookX;

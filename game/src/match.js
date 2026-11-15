@@ -1,9 +1,10 @@
 // The match: one state object for the whole game — phases, rounds, the economy, the
-// bomb and the score. main.js steps it, bots.js and the player act through it, hud.js
-// reads it. Nothing else keeps match state.
+// bomb, the round plan and the score. main.js steps it, bots.js and the player act
+// through it, hud.js reads it. Nothing else keeps match state.
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
 import { SITES } from './mapdata.js';
+import { choosePlan } from './plans.js';
 
 export const BUY_TIME = 12;
 export const ROUND_TIME = 100;
@@ -47,17 +48,18 @@ export function createMatch(scene, random) {
   const state = {
     phase: 'menu',
     round: 0,
-    score: { atk: 0, def: 0 },
+    score: { squad: 0, foe: 0 }, // rounds won by each SQUAD; squads persist across the halftime side swap
     playerTeam: 'atk',
     money: START_MONEY,
     lossStreak: 0,
     targetSite: 'A',
+    plan: null,
     roundTimer: 0,
     buyTimer: 0,
     endTimer: 0,
     endReason: '',
-    roundWinner: null,
-    matchWinner: null,
+    roundWinner: null, // the winning SIDE of the last round ('atk' | 'def')
+    matchWinner: null, // the winning SQUAD ('squad' | 'foe' | null on a draw)
     bomb: { state: 'none', site: null, position: new THREE.Vector3(), carrier: null, timer: 0, beepLeft: 0 },
     loadout: { frags: 0, smokes: 0, kit: false, armour: 0 },
     stats: { kills: 0, deaths: 0, plants: 0, defuses: 0, damage: 0 },
@@ -80,8 +82,8 @@ export function createMatch(scene, random) {
 
   function startMatch() {
     state.round = 0;
-    state.score.atk = 0;
-    state.score.def = 0;
+    state.score.squad = 0;
+    state.score.foe = 0;
     state.playerTeam = 'atk';
     state.money = START_MONEY;
     state.lossStreak = 0;
@@ -97,7 +99,8 @@ export function createMatch(scene, random) {
       state.playerTeam = state.playerTeam === 'atk' ? 'def' : 'atk';
       emit('halftime', { team: state.playerTeam });
     }
-    state.targetSite = random() < 0.55 ? 'A' : 'B';
+    state.plan = choosePlan(random);
+    state.targetSite = state.plan.attack.site;
     state.phase = 'buy';
     state.buyTimer = BUY_TIME;
     state.roundTimer = ROUND_TIME;
@@ -115,8 +118,14 @@ export function createMatch(scene, random) {
     state.endTimer = 4;
     state.roundWinner = winner;
     state.endReason = reason;
-    state.score[winner] += 1;
-    const playerWon = winner === state.playerTeam;
+    // `winner` is the winning SIDE; the score is kept by SQUAD. The player's
+    // squad plays whichever side it holds this half, so a round won by the
+    // current playerTeam credits the player's squad even after the halftime
+    // side swap — crediting the side instead would hand the second half's
+    // wins to the wrong name.
+    const squadKey = winner === state.playerTeam ? 'squad' : 'foe';
+    state.score[squadKey] += 1;
+    const playerWon = squadKey === 'squad';
     if (playerWon) {
       state.money += WIN_REWARD;
       state.lossStreak = 0;
@@ -126,8 +135,8 @@ export function createMatch(scene, random) {
     }
     state.money = Math.min(16000, state.money);
     emit('roundEnd', { winner, reason });
-    if (state.score[winner] >= WIN_ROUNDS || state.round >= MAX_ROUNDS) {
-      state.matchWinner = state.score.atk > state.score.def ? 'atk' : state.score.def > state.score.atk ? 'def' : null;
+    if (state.score.squad >= WIN_ROUNDS || state.score.foe >= WIN_ROUNDS || state.round >= MAX_ROUNDS) {
+      state.matchWinner = state.score.squad > state.score.foe ? 'squad' : state.score.foe > state.score.squad ? 'foe' : null;
       state.phase = 'matchEnd';
       emit('matchEnd', { winner: state.matchWinner });
     }
@@ -170,6 +179,7 @@ export function createMatch(scene, random) {
     const item = BUY_MENU.find((i) => i.id === id);
     if (!item || state.phase !== 'buy') return false;
     if (item.kind === 'kit' && state.playerTeam !== 'def') return false;
+    if (item.kind === 'kit' && state.loadout.kit) return false;
     if (item.kind === 'frag' && state.loadout.frags >= 2) return false;
     if (item.kind === 'smoke' && state.loadout.smokes >= 2) return false;
     if (item.kind === 'armour' && state.loadout.armour >= 100) return false;

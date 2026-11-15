@@ -46,6 +46,9 @@ export const BOXES = [
   [1.2, 0.9, 1.2, -2, 0.45, -10, 'olive'],
   [1.4, 1.1, 1.4, 16, 0.55, 4, 'hairline'],
   [1.4, 1.1, 1.4, -16, 0.55, 10, 'hairline'],
+  // Mid-door cover: crates just off the corridor, so the mid fight has corners.
+  [1.2, 0.9, 1.2, -3, 0.45, -4.5, 'olive'],
+  [1.2, 0.9, 1.2, 3, 0.45, -4.5, 'olive'],
   // Sandbag lines and low barriers (waist-high: shoot over, not through).
   [3.2, 1.0, 0.8, -19, 0.5, -11.5, 'sand'],
   [3.2, 1.0, 0.8, 19, 0.5, -12, 'sand'],
@@ -66,6 +69,9 @@ export const CYLINDERS = [
   [0.45, 0.45, 1.1, -14, 0.55, 6, 'teal', 12],
   [0.45, 0.45, 1.1, -9, 0.55, -12, 'rust', 12],
   [0.45, 0.45, 1.1, 9, 0.55, -13, 'rust', 12],
+  // Approach barrels: cover on the walks up to each site.
+  [0.45, 0.45, 1.1, -13, 0.55, -1.5, 'rust', 12],
+  [0.45, 0.45, 1.1, 13.5, 0.55, -1.5, 'teal', 12],
 ];
 
 // Bomb sites: plant anywhere inside the rectangle.
@@ -76,10 +82,10 @@ export const SITES = [
 
 export const SPAWNS = {
   atk: [
-    [20, 17], [22, 15], [18, 15], [23, 18],
+    [20, 17], [22, 15], [18, 15], [23, 17], [21, 14],
   ],
   def: [
-    [-20, -17], [-22, -15], [-18, -15], [-23, -18],
+    [-20, -17], [-22, -15], [-18, -15], [-23, -17], [-21, -14],
   ],
 };
 

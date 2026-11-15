@@ -1,14 +1,17 @@
-// The bots: seven AI soldiers with a shared brain. Each thinks at 8 Hz and steers at
-// 60 Hz: waypoint routes from the nav graph, a vision cone with line-of-sight and smoke
-// checks, hearing that turns heads toward gunfire, burst fire with aim error, and
-// objective play — attackers push a site and plant, defenders hold, rotate and defuse.
+// The bots: nine AI soldiers with a shared brain. Each thinks at 8 Hz and steers at
+// 60 Hz: waypoint routes from the nav graph (via its lane node, then the site),
+// a vision cone with line-of-sight and smoke checks, hearing that turns heads
+// toward gunfire, burst fire with aim error, radio callouts when it spots,
+// plants, defuses or rotates, and objective play — attackers push a site and
+// plant, defenders hold, rotate and defuse.
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
 import { makeBody, moveBody, hasLineOfSight, findPath, buildAdjacency } from './physics.js';
 import { NODES, EDGES } from './mapdata.js';
+import { zoneOf } from './plans.js';
 import { pick, range } from './rng.js';
 
-const NAMES = ['Rook', 'Havoc', 'Sable', 'Nomad', 'Vex', 'Onyx', 'Bram'];
+const NAMES = ['Rook', 'Havoc', 'Sable', 'Fenn', 'Nomad', 'Vex', 'Onyx', 'Bram', 'Kite'];
 const EYE = 1.55;
 const THINK_HZ = 8;
 const VISION_RANGE = 42;
@@ -22,8 +25,8 @@ export function createBots(scene, colliders, hooks) {
   const armGeo = new THREE.BoxGeometry(0.13, 0.5, 0.13);
   const gunGeo = new THREE.BoxGeometry(0.07, 0.09, 0.62);
   const mats = {
-    atk: new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.atk), roughness: 0.7 }),
-    def: new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.def), roughness: 0.7 }),
+    atk: new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.atk), emissive: new THREE.Color(PALETTE.atk), emissiveIntensity: 0.22, roughness: 0.7 }),
+    def: new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.def), emissive: new THREE.Color(PALETTE.def), emissiveIntensity: 0.22, roughness: 0.7 }),
     dark: new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.hairline), roughness: 0.8 }),
     skin: new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.sand), roughness: 0.8 }),
   };
@@ -49,13 +52,15 @@ export function createBots(scene, colliders, hooks) {
     const legR = new THREE.Mesh(legGeo, mats.dark);
     legR.position.set(0.13, 0.36, 0);
     const armL = new THREE.Mesh(armGeo, mats[team]);
-    armL.position.set(-0.3, 1.2, -0.12);
-    armL.rotation.x = -1.1;
+    armL.position.set(-0.24, 1.2, -0.2);
+    armL.rotation.x = -1.25;
+    armL.rotation.z = 0.3;
     const armR = new THREE.Mesh(armGeo, mats[team]);
-    armR.position.set(0.3, 1.2, -0.12);
-    armR.rotation.x = -1.1;
+    armR.position.set(0.24, 1.2, -0.2);
+    armR.rotation.x = -1.25;
+    armR.rotation.z = -0.3;
     const gun = new THREE.Mesh(gunGeo, mats.dark);
-    gun.position.set(0.18, 1.28, -0.42);
+    gun.position.set(0.1, 1.28, -0.45);
     group.add(torso, head, band, legL, legR, armL, armR, gun);
     return { group, torso, head, band, armL, armR, legL, legR, gun };
   }
@@ -108,6 +113,7 @@ export function createBots(scene, colliders, hooks) {
       investigate: null,
       alert: 0,
       carrier: false,
+      calloutLeft: 0,
       planting: 0,
       defusing: 0,
       walkPhase: hooks.random() * 6,
@@ -156,6 +162,15 @@ export function createBots(scene, colliders, hooks) {
     bot.pathIndex = 0;
   }
 
+  // Radio: a bot calls what it sees and does, at most one call every 5 seconds,
+  // so the feed reads as a team talking, not a spam log. main.js shows only the
+  // player's own team — hearing the enemy's radio would give the game away.
+  function callout(bot, text) {
+    if (bot.calloutLeft > 0 || !hooks.onCallout) return;
+    bot.calloutLeft = 5;
+    hooks.onCallout(bot.name, text, bot.team);
+  }
+
   function faceToward(bot, x, z, dt, rate = 7) {
     const want = Math.atan2(-(x - bot.body.position.x), -(z - bot.body.position.z));
     let diff = want - bot.yaw;
@@ -192,7 +207,10 @@ export function createBots(scene, colliders, hooks) {
       }
     }
     if (best) {
-      if (bot.target !== best) bot.reactLeft = range(hooks.random, 0.28, 0.5) * (1.15 - bot.skill * 0.5);
+      if (bot.target !== best) {
+        bot.reactLeft = range(hooks.random, 0.28, 0.5) * (1.15 - bot.skill * 0.5);
+        callout(bot, `Contact, ${zoneOf(best.body.position.x, best.body.position.z)}!`);
+      }
       bot.target = best;
       bot.lastKnown.copy(best.body.position);
       bot.hasKnown = true;
@@ -247,10 +265,12 @@ export function createBots(scene, colliders, hooks) {
     }
     if (bot.team === 'atk') {
       if (bot.carrier && bomb.state === 'carried' && hooks.inSite(bot.body.position.x, bot.body.position.z, hooks.targetSite())) {
+        if (bot.mode !== 'plant') callout(bot, `Planting at Site ${hooks.targetSite()}!`);
         bot.mode = 'plant';
         return;
       }
       if (bomb.state === 'dropped' && hooks.nearestAttacker() === bot) {
+        callout(bot, 'Recovering the charge!');
         routeTo(bot, nearestNode(bomb.position.x, bomb.position.z));
         bot.mode = 'advance';
         bot.afterArrive = 'hold';
@@ -266,7 +286,7 @@ export function createBots(scene, colliders, hooks) {
         }
         return;
       }
-      if (bot.mode === 'advance' && bot.pathIndex >= bot.path.length) {
+      if (bot.mode === 'advance' && bot.pathIndex >= bot.path.length && bot.afterArrive !== 'push') {
         bot.mode = 'hold';
         bot.holdYaw = bot.yaw;
         return;
@@ -290,12 +310,14 @@ export function createBots(scene, colliders, hooks) {
     } else {
       if (bomb.state === 'planted') {
         if (bot.mode !== 'defuse') {
+          callout(bot, 'Defusing the charge!');
           routeTo(bot, nearestNode(bomb.position.x, bomb.position.z));
           bot.mode = 'defuse';
         }
         return;
       }
       if (bot.investigate && bot.mode === 'hold') {
+        callout(bot, `Rotating to ${zoneOf(bot.investigate.x, bot.investigate.z)}!`);
         routeTo(bot, nearestNode(bot.investigate.x, bot.investigate.z));
         bot.mode = 'advance';
         bot.afterArrive = 'hold';
@@ -370,6 +392,11 @@ export function createBots(scene, colliders, hooks) {
     } else if (bot.pathIndex < bot.path.length) {
       followPath(bot, dt);
       return;
+    } else if (bot.afterArrive === 'push') {
+      // Reached the lane waypoint: push on to the target site.
+      routeTo(bot, hooks.siteNode(hooks.targetSite()));
+      bot.afterArrive = null;
+      bot.mode = 'advance';
     } else if (bot.afterArrive === 'hold') {
       bot.mode = 'hold';
       bot.afterArrive = null;
@@ -470,6 +497,7 @@ export function createBots(scene, colliders, hooks) {
         bot.holdNode = a.holdNode ?? nearestNode(a.x, a.z);
         bot.holdYaw = a.holdYaw ?? a.yaw;
         bot.carrier = !!a.carrier;
+        bot.calloutLeft = 0;
         bot.target = null;
         bot.hasKnown = false;
         bot.planting = 0;
@@ -484,8 +512,11 @@ export function createBots(scene, colliders, hooks) {
         bot.model.band.material = mats[a.team];
         bot.model.armL.material = mats[a.team];
         bot.model.armR.material = mats[a.team];
-        if (a.team === 'atk') routeTo(bot, hooks.siteNode(hooks.targetSite()));
-        else {
+        if (a.team === 'atk') {
+          // Route via the plan's lane waypoint, then push the site.
+          routeTo(bot, a.viaNode ?? hooks.siteNode(hooks.targetSite()));
+          bot.afterArrive = 'push';
+        } else {
           routeTo(bot, bot.holdNode);
           bot.afterArrive = 'hold';
         }
@@ -507,6 +538,7 @@ export function createBots(scene, colliders, hooks) {
           continue;
         }
         bot.reactLeft = Math.max(0, bot.reactLeft - dt);
+        bot.calloutLeft = Math.max(0, bot.calloutLeft - dt);
         think(bot, dt);
         steer(bot, dt, frozen);
         if (bot.mode === 'engage') shootAt(bot, dt);

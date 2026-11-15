@@ -1,13 +1,13 @@
-// The DOM HUD: health, armour, ammo, money, timer, score, kill feed, banners, the buy
-// menu and a live minimap. It never touches the simulation; main.js pushes numbers in
-// and reads the play and buy callbacks out. DOM writes are cached so unchanged values
-// cost nothing.
-import { PALETTE, TEAM_NAMES } from './palette.js';
+// The DOM HUD: health, armour, ammo, money, timer, score, kill feed, radio
+// callouts, banners, the buy menu and a live minimap. It never touches the
+// simulation; main.js pushes numbers in and reads the play and buy callbacks
+// out. DOM writes are cached so unchanged values cost nothing.
+import { PALETTE } from './palette.js';
 import { BOXES, SITES, BOUNDS } from './mapdata.js';
 import { BUY_MENU } from './match.js';
 
 const COPY = {
-  start: { title: 'SANDVEIL', copy: 'Depot 7, dusk. Plant the pulse charge or hold the yard — first team to 5 rounds takes the match.', action: 'Deploy' },
+  start: { title: 'SANDVEIL', copy: 'Depot 7, dusk. Five against five: plant the pulse charge or hold the yard — first team to 5 rounds takes the match.', action: 'Deploy' },
   paused: { title: 'SANDVEIL', copy: 'Paused. Click to return to the depot.', action: 'Resume' },
   end: { title: 'Match over', copy: '', action: 'Play again' },
 };
@@ -29,12 +29,13 @@ export function createHud(callbacks) {
   const armourFill = $('armour-fill');
   const moneyEl = $('money');
   const timerEl = $('timer');
-  const scoreAtk = $('score-atk');
-  const scoreDef = $('score-def');
+  const scoreSquad = $('score-squad');
+  const scoreFoe = $('score-foe');
   const roundNum = $('round-num');
   const grenadeEl = $('grenades');
   const bombEl = $('bomb-status');
   const killfeed = $('killfeed');
+  const radio = $('radio');
   const bannerEl = $('banner');
   const bannerSub = $('banner-sub');
   const promptEl = $('prompt');
@@ -128,9 +129,11 @@ export function createHud(callbacks) {
       setText(timerEl, 'timer', text);
       timerEl.classList.toggle('urgent', !!urgent);
     },
-    setScore(atk, def, round) {
-      setText(scoreAtk, 'sa', String(atk));
-      setText(scoreDef, 'sd', String(def));
+    // The scoreline shows SQUAD totals (Vanguard left, Sentinels right), not
+    // side totals: the squads persist across the halftime side swap.
+    setScore(squad, foe, round) {
+      setText(scoreSquad, 'ss', String(squad));
+      setText(scoreFoe, 'sf', String(foe));
       setText(roundNum, 'rn', `ROUND ${round}`);
     },
     setGrenades(frags, smokes) {
@@ -152,6 +155,16 @@ export function createHud(callbacks) {
       killfeed.prepend(row);
       while (killfeed.children.length > 5) killfeed.lastChild.remove();
       setTimeout(() => row.remove(), 6000);
+    },
+    addCallout(name, text, team) {
+      // One line of team radio: who called, and what. Fades after 5 seconds.
+      const row = document.createElement('div');
+      row.className = 'radio-row';
+      const color = team === 'atk' ? PALETTE.atk : PALETTE.def;
+      row.innerHTML = `<b style="color:${color}">${name}</b><span> ${text}</span>`;
+      radio.prepend(row);
+      while (radio.children.length > 4) radio.lastChild.remove();
+      setTimeout(() => row.remove(), 5000);
     },
     banner(text, sub = '', holdMs = 2600) {
       bannerEl.textContent = text;

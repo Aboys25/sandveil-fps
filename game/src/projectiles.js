@@ -10,6 +10,7 @@ const FRAG_FUSE = 2.2;
 const FRAG_RADIUS = 8;
 const SMOKE_TIME = 12;
 const SMOKE_RADIUS = 3.4;
+const TRACER_LIFE = 0.12;
 
 export function createProjectiles(scene, colliders, hooks) {
   const grenades = [];
@@ -59,7 +60,7 @@ export function createProjectiles(scene, colliders, hooks) {
     attr.needsUpdate = true;
     tracer.line.visible = true;
     tracer.line.material.opacity = 0.85;
-    tracer.life = 0.07;
+    tracer.life = TRACER_LIFE;
   }
 
   function spawnImpact(point, colorHex, count = 6, speed = 2.4) {
@@ -203,7 +204,7 @@ export function createProjectiles(scene, colliders, hooks) {
     for (const tracer of tracers) {
       if (tracer.life <= 0) continue;
       tracer.life -= dt;
-      tracer.line.material.opacity = Math.max(0, tracer.life / 0.07) * 0.85;
+      tracer.line.material.opacity = Math.max(0, tracer.life / TRACER_LIFE) * 0.85;
       if (tracer.life <= 0) tracer.line.visible = false;
     }
     let moved = false;

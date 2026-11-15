@@ -3,7 +3,7 @@
 // and the bots shoot through, the plant/defuse interaction, grenade throws, the buy
 // flow, spectating, and the deterministic ?shot= setups the screenshots come from.
 import * as THREE from 'three';
-import { PALETTE } from './palette.js';
+import { PALETTE, TEAM_NAMES } from './palette.js';
 import { mulberry32, pick, range } from './rng.js';
 import { createAudio } from './audio.js';
 import { createWorld } from './world.js';
@@ -27,7 +27,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 document.getElementById('game').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -243,6 +243,10 @@ const bots = createBots(scene, world.colliders, {
     foePings.push({ x: bot.body.position.x, z: bot.body.position.z, at: match.state.time, team: bot.team });
   },
   onNoise: emitNoise,
+  onCallout: (name, text, team) => {
+    // Radio is the player's own team only; the enemy's calls stay unheard.
+    if (team === match.state.playerTeam) hud.addCallout(name, text, team);
+  },
   onKill: (victim, attacker, head) => onActorKilled(victim, attacker, head),
   onCarrierDown: (bot) => {
     if (match.state.bomb.carrier === bot) {
@@ -337,7 +341,7 @@ function respawnRound() {
   const team = match.state.playerTeam;
   const foeTeam = team === 'atk' ? 'def' : 'atk';
   const spawn = SPAWNS[team][0];
-  const yaw = team === 'atk' ? Math.PI * 0.78 : -Math.PI * 0.22;
+  const yaw = team === 'atk' ? Math.PI * 0.22 : -Math.PI * 0.78;
   player.reset(spawn[0], spawn[1], yaw);
   player.state.armour = match.state.loadout.armour;
   weapons.refillAll();
@@ -347,51 +351,37 @@ function respawnRound() {
   defuseProgress = 0;
   projectiles.clear();
 
-  // Bots: 3 allies, 4 enemies. Weapons scale with the round: pistols and SMGs early,
-  // rifles after, one marksman per side from round 3.
+  // Bots: 4 allies, 5 enemies. Weapons scale with the round: pistols and SMGs early,
+  // rifles after, one marksman per side from round 3. Attackers take the plan's
+  // lane waypoints; defenders take the setup's hold spots.
   const round = match.state.round;
+  const plan = match.state.plan;
   const assignments = [];
-  const allyNames = ['Rook', 'Havoc', 'Sable'];
-  const foeNames = ['Nomad', 'Vex', 'Onyx', 'Bram'];
+  const allyNames = ['Rook', 'Havoc', 'Sable', 'Fenn'];
+  const foeNames = ['Nomad', 'Vex', 'Onyx', 'Bram', 'Kite'];
   const pickGun = (i) => {
     if (round < 2) return i === 0 ? 'smg' : 'pistol';
     if (round >= 3 && i === 3) return 'dmr';
     return pick(random, ['rifle', 'rifle', 'smg', 'shotgun']);
   };
-  const holdFor = (i) => {
-    const spots = [...HOLD_SPOTS.A, ...HOLD_SPOTS.B, ...HOLD_SPOTS.mid];
-    return spots[i % spots.length];
+  const spots = [...HOLD_SPOTS.A, ...HOLD_SPOTS.B, ...HOLD_SPOTS.mid];
+  const buildAssignment = (side, spawn, k) => {
+    const hold = side === 'def' ? spots[plan.defense.holds[k % plan.defense.holds.length]] : spots[k % spots.length];
+    return {
+      team: side,
+      x: spawn[0],
+      z: spawn[1],
+      yaw: side === team ? yaw : yaw + Math.PI,
+      weapon: pickGun(k),
+      armour: round >= 2 ? 50 : 0,
+      holdNode: hold.node,
+      holdYaw: hold.yaw,
+      viaNode: side === 'atk' ? plan.attack.lanes[k % plan.attack.lanes.length] : undefined,
+      carrier: false,
+    };
   };
-  for (let i = 0; i < 3; i += 1) {
-    const s = SPAWNS[team][i + 1];
-    const hold = holdFor(i);
-    assignments.push({
-      team,
-      x: s[0],
-      z: s[1],
-      yaw,
-      weapon: pickGun(i),
-      armour: round >= 2 ? 50 : 0,
-      holdNode: hold.node,
-      holdYaw: hold.yaw,
-      carrier: false,
-    });
-  }
-  for (let i = 0; i < 4; i += 1) {
-    const s = SPAWNS[foeTeam][i];
-    const hold = holdFor(i + 1);
-    assignments.push({
-      team: foeTeam,
-      x: s[0],
-      z: s[1],
-      yaw: yaw + Math.PI,
-      weapon: pickGun(i),
-      armour: round >= 2 ? 50 : 0,
-      holdNode: hold.node,
-      holdYaw: hold.yaw,
-      carrier: false,
-    });
-  }
+  for (let i = 0; i < 4; i += 1) assignments.push(buildAssignment(team, SPAWNS[team][i + 1], i));
+  for (let i = 0; i < 5; i += 1) assignments.push(buildAssignment(foeTeam, SPAWNS[foeTeam][i], i));
   bots.spawn([...allyNames, ...foeNames], assignments);
   // The bomb: the player carries it while attacking, else a random attacker bot.
   if (team === 'atk') {
@@ -402,10 +392,11 @@ function respawnRound() {
     carrier.carrier = true;
     match.state.bomb.carrier = carrier;
   }
-  hud.setScore(match.state.score.atk, match.state.score.def, match.state.round);
+  hud.setScore(match.state.score.squad, match.state.score.foe, match.state.round);
   hud.setMoney(match.state.money);
   hud.setGrenades(match.state.loadout.frags, match.state.loadout.smokes);
-  hud.banner(`ROUND ${match.state.round}`, team === 'atk' ? `Plant the charge at Site ${match.state.targetSite}` : 'Defend the sites — stop the plant', 3000);
+  const planCall = team === 'atk' ? plan.attack.name : plan.defense.name;
+  hud.banner(`ROUND ${match.state.round}`, team === 'atk' ? `${planCall} — plant the charge at Site ${match.state.targetSite}` : `${planCall} — defend the sites, stop the plant`, 3000);
 }
 
 function syncHudStatic() {
@@ -598,8 +589,12 @@ function step(dt) {
   if (phase === 'live') {
     const atkAlive = (match.state.playerTeam === 'atk' && player.state.alive ? 1 : 0) + bots.aliveCount('atk');
     const defAlive = (match.state.playerTeam === 'def' && player.state.alive ? 1 : 0) + bots.aliveCount('def');
-    if (bomb.state !== 'planted' && atkAlive === 0) match.endRound('def', 'Vanguard eliminated');
-    else if (defAlive === 0) match.endRound('atk', 'Sentinels eliminated');
+    // Elimination reasons name the SQUAD wiped out: the attackers are the
+    // player's squad while it attacks, the foe squad after the swap.
+    const atkSquad = match.state.playerTeam === 'atk' ? 'squad' : 'foe';
+    const defSquad = match.state.playerTeam === 'def' ? 'squad' : 'foe';
+    if (bomb.state !== 'planted' && atkAlive === 0) match.endRound('def', `${TEAM_NAMES[atkSquad]} eliminated`);
+    else if (defAlive === 0) match.endRound('atk', `${TEAM_NAMES[defSquad]} eliminated`);
   }
 
   // Bomb mesh follows its carrier.
@@ -621,13 +616,15 @@ function step(dt) {
       const won = event.winner === match.state.playerTeam;
       audio.round(won);
       hud.banner(won ? 'ROUND WON' : 'ROUND LOST', event.reason, 3200);
-      hud.setScore(match.state.score.atk, match.state.score.def, match.state.round);
+      hud.setScore(match.state.score.squad, match.state.score.foe, match.state.round);
       hud.setMoney(match.state.money);
     } else if (event.type === 'matchEnd') {
-      const won = event.winner === match.state.playerTeam;
+      // The matchEnd winner is a SQUAD key: 'squad' is always the player's
+      // squad, whichever side it played in the final round.
+      const won = event.winner === 'squad';
       hud.showOverlay('end', {
         title: won ? 'VICTORY' : event.winner ? 'DEFEAT' : 'DRAW',
-        copy: `Final score — Vanguard ${match.state.score.atk} : ${match.state.score.def} Sentinels.`,
+        copy: `Final score — ${TEAM_NAMES.squad} ${match.state.score.squad} : ${match.state.score.foe} ${TEAM_NAMES.foe}.`,
         stats: `Kills ${match.state.stats.kills} · Deaths ${match.state.stats.deaths} · Plants ${match.state.stats.plants} · Defuses ${match.state.stats.defuses} · Damage ${Math.round(match.state.stats.damage)}`,
       });
       if (document.pointerLockElement) document.exitPointerLock();
@@ -787,46 +784,64 @@ function runShot(name) {
     hud.showOverlay('start');
   } else if (name === 'buy') {
     player.state.body.position.set(24, 0, 13);
+    match.state.money = 4200;
     settle(10);
     aimAt(new THREE.Vector3(10, 1.4, 4));
     hud.showBuyMenu(true, match.state.money, match.state.playerTeam);
     hud.setBuyTimer(BUY_TIME);
   } else if (name === 'play') {
+    // Stage a live mid-corridor firefight: a smoke cloud blooming past the
+    // defenders, two defenders close in the corridor, an ally firing across
+    // the frame, and a radio callout on the feed — all through the game's
+    // own systems. The player stands off-centre so the lamp stays out of the
+    // sightline.
+    player.state.body.position.set(2.2, 0, 8);
+    match.state.loadout.smokes = 1;
+    aimAt(new THREE.Vector3(0, 5, -10));
+    throwGrenade('smoke');
+    settle(70);
     match.state.phase = 'live';
-    player.state.body.position.set(0, 0, 8);
-    settle(6);
-    // Stage two defenders in the mid corridor, on open ground, for a combat frame.
     const foes = bots.bots.filter((b) => b.team !== match.state.playerTeam);
     if (foes[0]) {
-      foes[0].body.position.set(1.3, 0, -3.5);
+      foes[0].body.position.set(1.0, 0, -1.5);
       foes[0].yaw = Math.PI;
       foes[0].mode = 'hold';
     }
     if (foes[1]) {
-      foes[1].body.position.set(-2.5, 0, -4.2);
-      foes[1].yaw = Math.PI * 0.8;
+      foes[1].body.position.set(-1.2, 0, -3.0);
+      foes[1].yaw = Math.PI * 0.9;
       foes[1].mode = 'hold';
     }
-    settle(10);
-    aimAt(new THREE.Vector3(1.3, 1.4, -3.5));
+    const allies = bots.bots.filter((b) => b.team === match.state.playerTeam);
+    if (allies[0] && foes[0]) {
+      allies[0].body.position.set(-3.5, 0, 5.5);
+      allies[0].yaw = 0.5;
+      allies[0].mode = 'engage';
+      allies[0].target = foes[0];
+      allies[0].reactLeft = 0;
+      allies[0].burstLeft = 2;
+    }
+    settle(1);
+    aimAt(new THREE.Vector3(1.0, 1.4, -1.5));
     playerShoot();
-    settle(2);
+    settle(1);
   } else if (name === 'plant') {
     match.state.phase = 'live';
     match.state.bomb.state = 'planted';
     match.state.bomb.site = 'A';
     match.state.bomb.timer = 24;
-    match.state.bomb.position.set(-19, 0, -8);
-    player.state.body.position.set(-13, 0, -5);
+    match.state.bomb.position.set(-18.6, 0, -7.6);
+    player.state.body.position.set(-15, 0, -6.5);
     settle(6);
     const foes = bots.bots.filter((b) => b.team !== match.state.playerTeam);
     if (foes[0]) {
-      foes[0].body.position.set(-17.5, 0, -7.5);
-      foes[0].yaw = -2.1;
+      foes[0].body.position.set(-16.6, 0, -8.6);
+      foes[0].yaw = -2.5;
       foes[0].mode = 'hold';
+      foes[0].walkPhase = 0;
     }
     settle(10);
-    aimAt(new THREE.Vector3(-18, 1.0, -7.5));
+    aimAt(new THREE.Vector3(-18.0, 0.7, -7.9));
     hud.showPrompt('Defusing…', 0.4);
   }
   hud.hideBanner();
@@ -843,6 +858,9 @@ function paintTwiceThenReady() {
     if (painted < 2) {
       requestAnimationFrame(paint);
     } else {
+      // Refresh the staged radio callout on the last paint: the feed row lives
+      // 5 s, and the software-rasterised paints are slow enough to outlive it.
+      if (shot === 'play') hud.addCallout('Rook', 'Contact, mid!', match.state.playerTeam);
       // Frozen: no animation loop runs after this, so the frame the capture tool
       // screenshots is exactly the staged one and the page sits idle.
       window.__shotReady = true;

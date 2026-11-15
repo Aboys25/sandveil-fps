@@ -22,17 +22,19 @@ function canvasTexture(size, draw, repeatX = 1, repeatY = 1) {
 
 function groundTexture() {
   return canvasTexture(1024, (g, s) => {
-    g.fillStyle = '#6d5b41';
+    g.fillStyle = '#77644a';
     g.fillRect(0, 0, s, s);
     let seed = 7;
     const rnd = () => {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
-    for (let i = 0; i < 9000; i += 1) {
-      const v = 90 + Math.floor(rnd() * 50);
-      g.fillStyle = `rgb(${v + 18},${v - 6},${v - 34})`;
-      g.fillRect(rnd() * s, rnd() * s, 2 + rnd() * 5, 2 + rnd() * 5);
+    // Fine, low-contrast speckle: the canvas stretches over 64 m, so coarse
+    // marks read as blotches from eye height.
+    for (let i = 0; i < 14000; i += 1) {
+      const v = 100 + Math.floor(rnd() * 34);
+      g.fillStyle = `rgb(${v + 14},${v - 4},${v - 26})`;
+      g.fillRect(rnd() * s, rnd() * s, 1 + rnd() * 3, 1 + rnd() * 3);
     }
     // Worn asphalt lanes.
     g.fillStyle = 'rgba(52,48,44,0.55)';
@@ -62,9 +64,9 @@ function groundTexture() {
 
 function wallTexture() {
   return canvasTexture(256, (g, s) => {
-    g.fillStyle = '#3a3227';
+    g.fillStyle = '#4a4034';
     g.fillRect(0, 0, s, s);
-    g.fillStyle = 'rgba(255,255,255,0.05)';
+    g.fillStyle = 'rgba(255,255,255,0.08)';
     const speckle = mulberry32(77);
     for (let i = 0; i < 300; i += 1) g.fillRect(speckle() * s, speckle() * s, 3, 3);
     g.strokeStyle = 'rgba(0,0,0,0.45)';
@@ -134,7 +136,7 @@ function letterSprite(letter, color) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false }));
-  sprite.scale.set(2.6, 2.6, 1);
+  sprite.scale.set(1.9, 1.9, 1);
   return sprite;
 }
 
@@ -197,7 +199,7 @@ export function createWorld(scene) {
   const markers = {};
   for (const site of SITES) {
     const sprite = letterSprite(site.label, PALETTE.accent);
-    sprite.position.set(site.cx, 4.6, site.cz);
+    sprite.position.set(site.cx, 5.4, site.cz);
     scene.add(sprite);
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(2.2, 2.5, 40),
@@ -237,7 +239,7 @@ export function createWorld(scene) {
     head.position.set(x, 4.6, z);
     group.add(head);
     const glow = new THREE.Sprite(glowMat);
-    glow.scale.set(1.6, 1.6, 1);
+    glow.scale.set(1.3, 1.3, 1);
     glow.position.set(x, 4.55, z);
     scene.add(glow);
     if (index < 3) {
@@ -248,10 +250,11 @@ export function createWorld(scene) {
   });
 
   // Lighting: low amber sun with shadows, cool dusk fill, warm hemisphere.
+  // Bright enough that shadow sides read instead of going black.
   scene.fog = new THREE.Fog(new THREE.Color('#8a5a3a'), 30, 90);
-  const hemi = new THREE.HemisphereLight(new THREE.Color('#5a5f8a'), new THREE.Color('#6d5b41'), 1.05);
+  const hemi = new THREE.HemisphereLight(new THREE.Color('#5a5f8a'), new THREE.Color('#6d5b41'), 1.5);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(new THREE.Color('#ffb347'), 2.4);
+  const sun = new THREE.DirectionalLight(new THREE.Color('#ffb347'), 2.6);
   sun.position.set(30, 26, 18);
   sun.target.position.set(0, 0, 0);
   sun.castShadow = true;
@@ -263,7 +266,7 @@ export function createWorld(scene) {
   sun.shadow.camera.far = 90;
   sun.shadow.bias = -0.0005;
   scene.add(sun, sun.target);
-  const fill = new THREE.DirectionalLight(new THREE.Color('#7d8fb5'), 0.7);
+  const fill = new THREE.DirectionalLight(new THREE.Color('#7d8fb5'), 1.0);
   fill.position.set(-24, 18, -20);
   scene.add(fill);
 
