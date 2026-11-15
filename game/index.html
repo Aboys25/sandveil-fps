@@ -83,7 +83,7 @@
   #prompt.show { display: flex; }
   #prompt-text { font-size: 15px; background: rgba(22,18,14,0.78); border: 1px solid var(--hairline); border-radius: 4px; padding: 6px 14px; }
   #prompt-bar { width: 180px; height: 5px; background: var(--hairline); border-radius: 3px; overflow: hidden; }
-  #prompt-fill { height: 100%; width: 0; background: var(--accent); }
+  #prompt-fill { display: block; height: 100%; width: 0; background: var(--accent); }
 
   #spectate { position: fixed; left: 50%; bottom: 150px; transform: translateX(-50%); display: none; font-size: 14px; color: var(--muted); }
   #spectate.show { display: block; }
@@ -160,8 +160,8 @@
     <div class="bar-row"><span class="label">ARMOUR</span><span class="bar"><i id="armour-fill"></i></span><b id="armour-num">0</b></div>
   </div>
   <div id="ammo">
-    <span id="weapon-name">VK-7 RIFLE</span>
-    <span id="ammo-line"><span id="ammo-mag">30</span><span id="ammo-reserve">/ 90</span></span>
+    <span id="weapon-name">P9 SIDEARM</span>
+    <span id="ammo-line"><span id="ammo-mag">12</span><span id="ammo-reserve">/ 48</span></span>
   </div>
 </div>
 
@@ -181,7 +181,7 @@
       <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
       <li><kbd>Mouse</kbd> Look · fire</li>
       <li><kbd>R</kbd> Reload</li>
-      <li><kbd>Ctrl</kbd> Crouch</li>
+      <li><kbd>C</kbd> Crouch</li>
       <li><kbd>Shift</kbd> Quiet walk</li>
       <li><kbd>Space</kbd> Jump</li>
       <li><kbd>1</kbd><kbd>2</kbd> Weapons</li>
