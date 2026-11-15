@@ -15,6 +15,8 @@
     --accent: #ffb347;
     --atk: #e4572e;
     --def: #3fa7d6;
+    --vanguard: #e4572e; /* the player's squad, ember in both halves */
+    --sentinels: #3fa7d6; /* the foe squad, steel blue in both halves */
     --danger: #e5484d;
     --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-readout: ui-monospace, 'SF Mono', Menlo, monospace;
@@ -56,8 +58,10 @@
   #topbar { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
   #round-num { font-family: var(--font-readout); font-size: 11px; letter-spacing: 0.18em; color: var(--muted); }
   #scoreline { display: flex; align-items: center; gap: 14px; font-family: var(--font-readout); font-size: 26px; font-weight: 600; }
-  #score-atk { color: var(--atk); }
-  #score-def { color: var(--def); }
+  /* Squad totals: Vanguard (left) vs Sentinels (right). The squads persist
+     across the halftime side swap, so these numbers never change meaning. */
+  #score-squad { color: var(--vanguard); }
+  #score-foe { color: var(--sentinels); }
   #timer { font-size: 20px; min-width: 64px; text-align: center; background: rgba(22,18,14,0.72); border: 1px solid var(--hairline); border-radius: 4px; padding: 2px 10px; }
   #timer.urgent { color: var(--danger); border-color: var(--danger); }
   #bomb-status { display: none; font-family: var(--font-readout); font-size: 12px; letter-spacing: 0.12em; color: var(--danger); background: rgba(22,18,14,0.72); border: 1px solid var(--danger); border-radius: 4px; padding: 3px 10px; }
@@ -66,6 +70,10 @@
   #killfeed { position: fixed; right: 20px; top: 20px; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; font-size: 13px; }
   .kill-row { background: rgba(22,18,14,0.72); border: 1px solid var(--hairline); border-radius: 4px; padding: 4px 10px; }
   .kill-row b { font-weight: 600; }
+
+  #radio { position: fixed; left: 20px; bottom: 138px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; font-family: var(--font-readout); font-size: 12px; }
+  .radio-row { background: rgba(22,18,14,0.72); border: 1px solid var(--hairline); border-left: 3px solid var(--accent); border-radius: 4px; padding: 4px 10px; }
+  .radio-row b { font-weight: 600; }
 
   #banner { position: fixed; left: 50%; top: 24%; transform: translateX(-50%); font-size: 42px; font-weight: 650; letter-spacing: 0.06em; text-shadow: 0 2px 14px rgba(0,0,0,0.7); opacity: 0; transition: opacity 200ms linear; text-align: center; white-space: nowrap; }
   #banner-sub { position: fixed; left: 50%; top: calc(24% + 52px); transform: translateX(-50%); font-size: 16px; color: var(--muted); text-shadow: 0 1px 8px rgba(0,0,0,0.8); opacity: 0; transition: opacity 200ms linear; white-space: nowrap; }
@@ -136,10 +144,11 @@
   <canvas id="minimap" width="160" height="126"></canvas>
   <div id="topbar">
     <div id="round-num">ROUND 1</div>
-    <div id="scoreline"><span id="score-atk">0</span><span id="timer">1:40</span><span id="score-def">0</span></div>
+    <div id="scoreline"><span id="score-squad">0</span><span id="timer">1:40</span><span id="score-foe">0</span></div>
     <div id="bomb-status"></div>
   </div>
   <div id="killfeed"></div>
+  <div id="radio"></div>
   <div id="banner"></div>
   <div id="banner-sub"></div>
   <div id="prompt"><span id="prompt-text"></span><span id="prompt-bar"><span id="prompt-fill"></span></span></div>
@@ -165,7 +174,7 @@
 <div id="overlay" class="overlay">
   <section class="panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
     <h1 id="overlay-title">SAND<span>VEIL</span></h1>
-    <p id="overlay-copy">Depot 7, dusk. Plant the pulse charge or hold the yard — first team to 5 rounds takes the match.</p>
+    <p id="overlay-copy">Depot 7, dusk. Five against five: plant the pulse charge or hold the yard — first team to 5 rounds takes the match.</p>
     <p id="overlay-stats"></p>
     <button id="play" type="button">Deploy</button>
     <ul class="keys">
